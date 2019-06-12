@@ -2,7 +2,7 @@
 This python3 program runs given number of simulations and outputs "probabilities" for each given team for each ranking. We assume that each team has one home game against every
 other team. We assume that all teams are equally strong but probability for a tie is given by user.
 ## Output
-Output is a table of 
+Output is a table of ranking occurrence percentages in simulations.
 ```
 team,1,2,3,4,5,6
 Italy,67.64,21.73,7.50,2.53,0.57,0.03
@@ -12,6 +12,8 @@ Greece,2.17,8.75,17.21,25.55,32.49,13.84
 Bosnia,1.81,8.34,19.28,28.39,27.37,14.81
 Liechtenstein,0.07,0.87,3.83,9.32,19.91,66.00
 ```
+This says that Finland had second place in 43.01% of simulations. 
+
 ## Input
 
 ```
