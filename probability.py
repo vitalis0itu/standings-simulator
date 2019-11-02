@@ -179,26 +179,26 @@ def filter_remaining_matches(existing_results: List[GameResult], games: List[Gam
     return games
 
 
-def random_result(tie_probability: float, point_system: str):
-    rand = random.random()
-    if rand < tie_probability:
-        if point_system == 'f':
-            return 'X'
-        elif point_system == '3ph':
-            if random.random() < 0.5:
-                return '1OT'
-            else:
-                return '2OT'
-        else:
-            raise NotImplementedError('Unsupported point system ' + point_system)
-    rand = random.random()
-    if rand < 0.5:
-        return '1'
-    return '2'
+def random_result(game: Game, tie_probability: float, point_system: str, team_weight: dict):
+    home_weight = team_weight[game.home]
+    away_weight = team_weight[game.away]
+    if home_weight + away_weight == 0:
+        home_weight = 1
+        away_weight = 1
+    home_win_probability = home_weight / (home_weight + away_weight)
+    if random.random() > tie_probability:
+        return '1' if random.random() < home_win_probability else '2'
+    if point_system == 'f':
+        return 'X'
+    elif point_system == '3ph':
+        # I don't know if weights should be used for shootouts because they are quite random
+        return '1OT' if random.random() < home_win_probability else '2OT'
+    else:
+        raise NotImplementedError('Unsupported point system ' + point_system)
 
 
-def random_results(length: int, tie_probability: float, point_system: str):
-    return [random_result(tie_probability, point_system) for i in range(length)]
+def random_results(remaining_game: List[Game], tie_probability: float, point_system: str, team_weight: dict):
+    return [random_result(remaining_game, tie_probability, point_system, team_weight) for remaining_game in remaining_game]
 
 
 def read_lines(filename: str, callback: Callable[[List[str]], None]):
@@ -242,6 +242,13 @@ def main():
     parser = argparse.ArgumentParser(description='Standings simulator')
     parser.add_argument('-ss', '--sample-size', required=True, help='Number of simulations')
     parser.add_argument('-tp', '--tie-probability', required=True, help='Probability of a tie')
+    win_probability_group = parser.add_mutually_exclusive_group()
+    win_probability_group.add_argument('-wpff', '--win-probability-fifty-fifty',
+                                       help='Probability of a win is fifty-fifty (when not a tie). We assume that teams are equally strong. This is the default behaviour.',
+                                       action='store_true')
+    win_probability_group.add_argument('-wpw', '--win-probability-weighted',
+                                       help='Probability of a win is weighted by point percentage of existing results. This will give odd results if some teams have not played any games (or lost all).',
+                                       action='store_true')
     parser.add_argument('-t', '--teams', nargs='+', required=True, help='Teams, teams with white spaces in their names should be written in double brackets: "FC Barcelona"')
     parser.add_argument('-ps', '--point-system', required=True, help='Points system, "f" for football (1X2: 3-0 or 1-1), "3ph" for 3 point hockey (0-1-2-3) system')
     parser.add_argument('-r', '--rounds', help='How many rounds are played against each other. Do not use with --all-games', type=int)
@@ -276,11 +283,12 @@ def main():
     remaining_matches = filter_remaining_matches(existing_results, games)
     standings = Standings(teams, args.point_system)
     standings.add_match_results(existing_results)
+    team_weight = calculate_team_weight(standings, args.win_probability_weighted)
     print('Current standings:')
     print(standings)
     summary = Summary(teams)
     for i in range(int(args.sample_size)):
-        results_arr = random_results(len(remaining_matches), Decimal(args.tie_probability), args.point_system)
+        results_arr = random_results(remaining_matches, Decimal(args.tie_probability), args.point_system, team_weight)
         new_standings = standings.clone()
         for i in range(len(remaining_matches)):
             new_standings.add_match_result(GameResult(remaining_matches[i], results_arr[i]))
@@ -303,6 +311,20 @@ def main():
             print(','.join(to_row(team)))
 
     print_result()
+
+
+def calculate_team_weight(standings: Standings, win_probability_weighted: bool) -> dict:
+    team_weight = {}
+    for team in standings.teams:
+        if not win_probability_weighted:
+            team_weight[team] = 1
+            continue
+        number_of_games = standings.results_by_team[team]['G']
+        if number_of_games == 0:
+            team_weight[team] = 0
+            continue
+        team_weight[team] = standings.points_table[team] / number_of_games
+    return team_weight
 
 
 main()

@@ -1,6 +1,5 @@
 # Standings simulator
-This python3 program runs given number of simulations and outputs "probabilities" for each given team for each ranking. We assume that all teams are equally strong but probability
- for a tie is given by user.
+This python3 program runs given number of simulations and outputs "probabilities" for each given team for each ranking.
 ## Output
 Output is a table of ranking occurrence percentages in simulations.
 ```
@@ -17,18 +16,31 @@ This says that Finland had second place in 43.01% of simulations.
 ## Input
 
 ```
-python3 probability.py -ps f -ss 100000 -tp 0.186842 -t Italy Finland Armenia Bosnia Greece "Swe Den" -er example-existing-results.txt -r 2
-python3 probability.py -ps f -ss 100000 -tp 0.186842 -t Italy Finland Armenia Bosnia Greece "Swe Den" -ag all-games.txt
-python3 probability.py -ps 3ph -ss 100000 -tp 0.186842 -t Italy Finland Armenia Bosnia Greece "Swe Den" -r 4
+python3 probability.py -ps f -wpff -ss 100000 -tp 0.186842 -t Italy Finland Armenia Bosnia Greece "Swe Den" -er example-existing-results.txt -r 2
+python3 probability.py -ps f -wpw -ss 100000 -tp 0.186842 -t Italy Finland Armenia Bosnia Greece "Swe Den" -ag all-games.txt
+python3 probability.py -ps 3ph -wpff -ss 100000 -tp 0.186842 -t Italy Finland Armenia Bosnia Greece "Swe Den" -r 4
 ```
 
-* `-s, --sample-size`: Number of simulations
-* `-tp, --tie-probability`: Probability of a tie. Premier league schedule in 2018-2019 had 380 games of which 71 ended in a tie resulting 0.186842105263158,
-* `-t, --teams`: List of participating teams
-* `-ps, --points-system`: Points system, "f" for football (1X2: 3-0 or 1-1), "3ph" for 3 point hockey (0-1-2-3) system
-* `-r, --rounds`: How many rounds are played against each other. Do not use with `--all-games`. Probably will not work well if the number is odd.
-* `-er, --existing-results`: Path to file containing existing results. Rounds argument should be used with this.
-* `-ag, --all-games`: Path to file containing all games. Game result should be written in third column.
+* `-s`, `--sample-size`:
+  * Number of simulations
+* `-tp`, `--tie-probability`:
+  * Probability of a tie. Premier league schedule in 2018-2019 had 380 games of which 71 ended in a tie resulting 0.186842105263158,
+* `-wpff`, `--win-probability-fifty-fifty`:
+  * Probability of win is assumed to be equal between any two teams. This is the default behaviour at the moment, so the switch is redundant.
+* `-wpw`, `--win-probability-weighted`:
+  * Probability of win is weighted by points percentage of existing game results. This option will give odd results if no existing results are given.
+* `-tp`, `--tie-probability`:
+  * Probability of a tie. Premier league schedule in 2018-2019 had 380 games of which 71 ended in a tie resulting 0.186842105263158,
+* `-t`, `--teams`:
+  * List of participating teams
+* `-ps`, `--points-system`:
+  * Points system, "f" for football (1X2: 3-0 or 1-1), "3ph" for 3 point hockey (0-1-2-3) system
+* `-r`, `--rounds`:
+  * How many rounds are played against each other. Do not use with `--all-games`. Probably will not work well if the number is odd.
+* `-er`, `--existing-results`:
+  * Path to file containing existing results. Rounds argument should be used with this.
+* `-ag`, `--all-games`:
+  * Path to file containing all games. Game result should be written in third column.
 
 Example of existing results file:
 ```
