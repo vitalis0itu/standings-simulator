@@ -1,167 +1,309 @@
+import argparse
 import itertools
 import random
-import argparse
 from decimal import Decimal, ROUND_HALF_UP
+from typing import List, Callable, Tuple
+
+
+class Game:
+    def __init__(self, home: str, away: str):
+        self.home = home
+        self.away = away
+
+    def __eq__(self, game):
+        return self.home == game.home and self.away == game.away
+
+    def __str__(self) -> str:
+        return ''.join(['Game{', self.home, ',', self.away, '}'])
+
+
+class GameResult:
+    def __init__(self, game: Game, result: str):
+        self.game = game
+        self.result = result
+
+    def __str__(self) -> str:
+        return ''.join(['GameResult{', self.game, ',', self.result, '}'])
+
+
+class TeamRanking:
+    def __init__(self, team: str, ranking: int):
+        self.team = team
+        self.ranking = ranking
+
 
 class Standings:
-    def __init__(self, teams):
+    def __init__(self, teams, point_system: str):
         self.teams = teams
         self.points_table = {}
+        self.results_by_team = {}
         for team in teams:
             self.points_table[team] = 0
-        self.order = {}
-        self.order_in_sync = False
+            if point_system == 'f':
+                self.results_by_team[team] = {'G': 0, 'W': 0, 'T': 0, 'L': 0}
+            if point_system == '3ph':
+                self.results_by_team[team] = {'G': 0, 'W': 0, 'OTW': 0, 'OTL': 0, 'L': 0}
+        self.point_system = point_system
 
-    def add_match_result(self, result):
-        if result['result'] == '1':
-            self.add_points(result['home'], 3)
-        elif result['result'] == '2':
-            self.add_points(result['away'], 3)
-        elif result['result'] == 'X':
-            self.add_points(result['home'], 1)
-            self.add_points(result['away'], 1)
-        else:
-            print('got unexpected results:', result)
+    def add_match_result(self, result: GameResult):
+        game = result.game
+        if self.point_system == 'f':
+            if result.result == '1':
+                self.add_points(game.home, 3)
+                self.add_team_result(game.home, 'W')
+                self.add_team_result(game.away, 'L')
+            elif result.result == '2':
+                self.add_points(game.away, 3)
+                self.add_team_result(game.home, 'L')
+                self.add_team_result(game.away, 'W')
+            elif result.result == 'X':
+                self.add_points(game.home, 1)
+                self.add_points(game.away, 1)
+                self.add_team_result(game.home, 'T')
+                self.add_team_result(game.away, 'T')
+            else:
+                print('got unexpected results:', result)
+        if self.point_system == '3ph':
+            if result.result == '1':
+                self.add_points(game.home, 3)
+                self.add_team_result(game.home, 'W')
+                self.add_team_result(game.away, 'L')
+            elif result.result == '2':
+                self.add_points(game.away, 3)
+                self.add_team_result(game.home, 'L')
+                self.add_team_result(game.away, 'W')
+            elif result.result == '1OT':
+                self.add_points(game.home, 2)
+                self.add_points(game.away, 1)
+                self.add_team_result(game.home, 'OTW')
+                self.add_team_result(game.away, 'OTL')
+            elif result.result == '2OT':
+                self.add_points(game.home, 1)
+                self.add_points(game.away, 2)
+                self.add_team_result(game.home, 'OTL')
+                self.add_team_result(game.away, 'OTW')
+            else:
+                print('got unexpected results:', result)
 
-    def add_match_results(self, results):
+    def add_match_results(self, results: List[GameResult]):
         for result in results:
             self.add_match_result(result)
 
-    def add_points(self, team, points):
-        self.order_in_sync = False
+    def add_team_result(self, team: str, result: str):
+        self.results_by_team[team]['G'] += 1
+        self.results_by_team[team][result] += 1
+
+    def get_team_result(self, team: str):
+        return self.results_by_team[team]
+
+    def add_points(self, team: str, points: int):
         self.points_table[team] = self.points_table[team] + points
 
-    def set_points(self, team, points):
-        self.order_in_sync = False
+    def set_points(self, team: str, points: int):
         self.points_table[team] = points
 
-    def sync_order(self):
-        dictlist = []
-        for key, value in self.points_table.items():
-            temp = [key,value]
-            dictlist.append(temp)
-        dictlist = sorted(dictlist, key=lambda temp: temp[1], reverse=True)
-        for i in range(len(dictlist)):
-            self.order[dictlist[i][0]] = i + 1
-        self.order_in_sync = True
+    def to_rankings(self) -> List[TeamRanking]:
+        def my_key(team) -> Tuple:
+            team_result = self.get_team_result(team)
+            if self.point_system == '3ph':
+                return self.points_table[team], team_result['W'], team_result['OTW'], team_result['OTL']
+            if self.point_system == 'f':
+                return self.points_table[team], team_result['W'], team_result['T']
 
-    def get_rank(self, team):
-        if not self.order_in_sync:
-            self.sync_order()
-        return self.order[team]
+        ranked_teams = sorted(self.teams, key=my_key, reverse=True)
+        return [TeamRanking(ranked_teams[i], i + 1) for i in range(len(ranked_teams))]
+
+    def __str__(self) -> str:
+        standing_lines = []
+        if self.point_system == '3ph':
+            standing_lines.append(('team', 'Win', 'OT Win', 'OT Loss', 'Loss', 'Points'))
+            for team_ranking in self.to_rankings():
+                team = team_ranking.team
+                result = self.results_by_team[team]
+                standing_lines.append((team, result['G'], result['W'], result['OTW'], result['OTL'], result['L'], self.points_table[team]))
+
+        if self.point_system == 'f':
+            standing_lines.append(('team', 'Win', 'Tie', 'Loss', 'Points'))
+            for team_ranking in self.to_rankings():
+                team = team_ranking.team
+                result = self.results_by_team[team]
+                standing_lines.append((team, result['G'], result['W'], result['T'], result['L'], self.points_table[team]))
+        return '\n'.join([','.join([str(y) for y in x]) for x in standing_lines])
 
 
 class Summary:
-    def __init__(self, teams):
+    def __init__(self, teams: List[str]):
         self.teams = teams
         self.ranks = {}
         for team in teams:
             self.ranks[team] = {}
+            for ranking in range(1, len(teams) + 1):
+                self.ranks[team][ranking] = 0
         self.standing_count = 0
-    
-    def add_standing(self, standing):
+
+    def add_standing(self, standing: Standings):
         self.standing_count = self.standing_count + 1
-        for team in self.teams:
-            team_rank = standing.get_rank(team)
+        rankings = standing.to_rankings()
+        for ranking in rankings:
+            team = ranking.team
+            team_rank = ranking.ranking
             if team_rank in self.ranks[team]:
                 self.ranks[team][team_rank] = self.ranks[team][team_rank] + 1
             else:
                 self.ranks[team][team_rank] = 1
 
 
-def copy_standings(standings):
-    new_standings = Standings(standings.teams)
+def copy_standings(standings: Standings) -> Standings:
+    new_standings = Standings(standings.teams, standings.point_system)
     points_table = standings.points_table
     for key, value in points_table.items():
         new_standings.set_points(key, value)
     return new_standings
 
 
-def generate_matches(teams):
-    matches = []
+def generate_games(teams: List[str], rounds: int) -> List[Game]:
+    games = []
     for pair in itertools.combinations(teams, 2):
-        matches.append({'home': pair[0], 'away': pair[1]})
-        matches.append({'home': pair[1], 'away': pair[0]})
-    return matches
+        for round in range(rounds):
+            games.append(Game(pair[round % 2], pair[(round + 1) % 2]))
+    return games
 
 
-def read_existing_results(filename):
-    with open(filename, 'r') as file:
-        results = []
-        for line in file:
-            strip = line.strip()
-            if strip == '' or strip[0] == '#':
+def filter_remaining_matches(existing_results: List[GameResult], games: List[Game]) -> List[Game]:
+    for existing_result in existing_results:
+        for index in range(len(games)):
+            game = games[index]
+            if existing_result.game != game:
                 continue
-            items = strip.split(',')
-            results.append({'home': items[0], 'away': items[1], 'result': items[2]})
-        file.close()
-        return results
+            games.pop(index)
+            break
+    return games
 
 
-def filter_remaining_matches(existing_results, matches):
-    def existing_match(match):
-        for existing_result in existing_results:
-            if existing_result['home'] != match['home']:
-                continue
-            if existing_result['away'] == match['away']:
-                return True
-        return False
-    return [match for match in matches if not existing_match(match)]
-
-
-def random_result(tie_probability):
+def random_result(tie_probability: float, point_system: str):
     rand = random.random()
     if rand < tie_probability:
-        return 'X'
+        if point_system == 'f':
+            return 'X'
+        elif point_system == '3ph':
+            if random.random() < 0.5:
+                return '1OT'
+            else:
+                return '2OT'
+        else:
+            raise NotImplementedError('Unsupported point system ' + point_system)
     rand = random.random()
     if rand < 0.5:
         return '1'
     return '2'
 
 
-def random_results(length, tie_probability):
-    return [random_result(tie_probability) for i in range(length)]
+def random_results(length: int, tie_probability: float, point_system: str):
+    return [random_result(tie_probability, point_system) for i in range(length)]
+
+
+def read_lines(filename: str, callback: Callable[[List[str]], None]):
+    with open(filename, 'r') as file:
+        for line in file:
+            strip = line.strip()
+            if strip == '' or strip[0] == '#':
+                continue
+            items = strip.split(',')
+            callback(items)
+        file.close()
+
+
+def read_existing_results(filename: str) -> List[GameResult]:
+    results = []
+
+    def callback(items: List[str]) -> None:
+        if len(items) >= 3:
+            results.append(GameResult(Game(items[0], items[1]), items[2]))
+
+    read_lines(filename, callback)
+    return results
+
+
+def read_games_without_results(filename: str) -> List[Game]:
+    results = []
+
+    def callback(items: List[str]) -> None:
+        if len(items) == 2:
+            results.append(Game(items[0], items[1]))
+
+    read_lines(filename, callback)
+    return results
+
+
+def game_not_in_teams(game: Game, teams: List[str]) -> bool:
+    return game.home not in teams or game.away not in teams
 
 
 def main():
-    parser = argparse.ArgumentParser(description='EURO 2020 QUALIFICATION GROUP J PROBABILITIES')
-    parser.add_argument('-s', '--sample-size', required=True)
-    parser.add_argument('-tp', '--tie-probability', required=True)
-    parser.add_argument('-t', '--teams', nargs='+', required=True)
-    parser.add_argument('-er', '--existing-results', required=True)
+    parser = argparse.ArgumentParser(description='Standings simulator')
+    parser.add_argument('-ss', '--sample-size', required=True, help='Number of simulations')
+    parser.add_argument('-tp', '--tie-probability', required=True, help='Probability of a tie')
+    parser.add_argument('-t', '--teams', nargs='+', required=True, help='Teams, teams with white spaces in their names should be written in double brackets: "FC Barcelona"')
+    parser.add_argument('-ps', '--point-system', required=True, help='Points system, "f" for football (1X2: 3-0 or 1-1), "3ph" for 3 point hockey (0-1-2-3) system')
+    parser.add_argument('-r', '--rounds', help='How many rounds are played against each other. Do not use with --all-games', type=int)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-er', '--existing-results', help='File containing only existing results')
+    group.add_argument('-ag', '--all-games', help='File containing all games with some games having results')
     args = parser.parse_args()
     teams = args.teams
-    existing_results = read_existing_results(args.existing_results)
-    print('got', len(existing_results), 'existing results')
+    games = None
+    existing_results = []
+    if args.all_games is not None:
+        if args.rounds is not None:
+            raise Exception('Argument --rounds should not be used with --all-games')
+        games = read_games_without_results(args.all_games)
+        existing_results = read_existing_results(args.all_games)
+    if args.existing_results is not None:
+        existing_results = read_existing_results(args.existing_results)
+    if games is None:
+        if args.rounds is None:
+            raise Exception('Argument --rounds was not found')
+        games = generate_games(teams, args.rounds)
+    print('Got', len(existing_results), 'existing results')
     print('Sample size:', args.sample_size)
     print('Tie probability:', args.tie_probability)
     for existing_result in existing_results:
-        if existing_result['home'] not in teams:
-            print('unexpected home team', existing_result)
-        if existing_result['away'] not in teams:
-            print('unexpected away team', existing_result)
-    matches = generate_matches(teams)
-    remaining_matches = filter_remaining_matches(existing_results, matches)
-    standings = Standings(teams)
+        if game_not_in_teams(existing_result.game, teams):
+            print('unexpected team', existing_result)
+    for game in games:
+        if game_not_in_teams(game, teams):
+            print('unexpected team', game)
+
+    remaining_matches = filter_remaining_matches(existing_results, games)
+    standings = Standings(teams, args.point_system)
     standings.add_match_results(existing_results)
+    print('Current standings:')
+    print(standings)
     summary = Summary(teams)
     for i in range(int(args.sample_size)):
-        results_arr = random_results(len(remaining_matches), Decimal(args.tie_probability))
+        results_arr = random_results(len(remaining_matches), Decimal(args.tie_probability), args.point_system)
         new_standings = copy_standings(standings)
         for i in range(len(remaining_matches)):
-            new_standings.add_match_result({'home': remaining_matches[i]['home'], 'away': remaining_matches[i]['away'], 'result': results_arr[i]})
+            new_standings.add_match_result(GameResult(remaining_matches[i], results_arr[i]))
         summary.add_standing(new_standings)
+
     def my_key(team):
-        return summary.ranks[team][1]
+        return [summary.ranks[team][i + 1] for i in range(len(teams))]
+
     def to_row(team):
         elements = [team]
         for i in range(len(teams)):
-            share = Decimal(100 * summary.ranks[team][i+1] / summary.standing_count)
+            share = Decimal(100 * summary.ranks[team][i + 1] / summary.standing_count)
             elements.append(str(Decimal(share.quantize(Decimal('.01'), rounding=ROUND_HALF_UP))))
         return elements
-    print('team,1,2,3,4,5,6')
-    for team in sorted([k for k in summary.ranks], key=my_key, reverse=True):
-        print(','.join(to_row(team)))
+
+    def print_result():
+        print('Simulated probabilities:')
+        print(','.join(['team'] + [str(x) for x in range(1, len(teams) + 1)]))
+        for team in sorted([k for k in summary.ranks], key=my_key, reverse=True):
+            print(','.join(to_row(team)))
+
+    print_result()
 
 
 main()
