@@ -35,6 +35,7 @@ class TeamRanking:
 class Standings:
     def __init__(self, teams, point_system: str):
         self.teams = teams
+        self.point_system = point_system
         self.points_table = {}
         self.results_by_team = {}
         for team in teams:
@@ -43,7 +44,6 @@ class Standings:
                 self.results_by_team[team] = {'G': 0, 'W': 0, 'T': 0, 'L': 0}
             if point_system == '3ph':
                 self.results_by_team[team] = {'G': 0, 'W': 0, 'OTW': 0, 'OTL': 0, 'L': 0}
-        self.point_system = point_system
 
     def add_match_result(self, result: GameResult):
         game = result.game
@@ -89,6 +89,13 @@ class Standings:
         for result in results:
             self.add_match_result(result)
 
+    def clone(self):
+        copy_standings = Standings(self.teams, self.point_system)
+        copy_standings.points_table = dict(self.points_table)
+        for team in self.teams:
+            copy_standings.results_by_team[team] = dict(self.results_by_team[team])
+        return copy_standings
+
     def add_team_result(self, team: str, result: str):
         self.results_by_team[team]['G'] += 1
         self.results_by_team[team][result] += 1
@@ -116,14 +123,14 @@ class Standings:
     def __str__(self) -> str:
         standing_lines = []
         if self.point_system == '3ph':
-            standing_lines.append(('team', 'Win', 'OT Win', 'OT Loss', 'Loss', 'Points'))
+            standing_lines.append(('team', 'Games', 'Win', 'OT Win', 'OT Loss', 'Loss', 'Points'))
             for team_ranking in self.to_rankings():
                 team = team_ranking.team
                 result = self.results_by_team[team]
                 standing_lines.append((team, result['G'], result['W'], result['OTW'], result['OTL'], result['L'], self.points_table[team]))
 
         if self.point_system == 'f':
-            standing_lines.append(('team', 'Win', 'Tie', 'Loss', 'Points'))
+            standing_lines.append(('team', 'Games', 'Win', 'Tie', 'Loss', 'Points'))
             for team_ranking in self.to_rankings():
                 team = team_ranking.team
                 result = self.results_by_team[team]
@@ -151,14 +158,6 @@ class Summary:
                 self.ranks[team][team_rank] = self.ranks[team][team_rank] + 1
             else:
                 self.ranks[team][team_rank] = 1
-
-
-def copy_standings(standings: Standings) -> Standings:
-    new_standings = Standings(standings.teams, standings.point_system)
-    points_table = standings.points_table
-    for key, value in points_table.items():
-        new_standings.set_points(key, value)
-    return new_standings
 
 
 def generate_games(teams: List[str], rounds: int) -> List[Game]:
@@ -282,7 +281,7 @@ def main():
     summary = Summary(teams)
     for i in range(int(args.sample_size)):
         results_arr = random_results(len(remaining_matches), Decimal(args.tie_probability), args.point_system)
-        new_standings = copy_standings(standings)
+        new_standings = standings.clone()
         for i in range(len(remaining_matches)):
             new_standings.add_match_result(GameResult(remaining_matches[i], results_arr[i]))
         summary.add_standing(new_standings)
